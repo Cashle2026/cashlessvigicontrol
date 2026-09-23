@@ -1,0 +1,1608 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VigilPro | Control de Vigilancia Privada</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+/* =========================================================
+   VigilPro — sistema de control de vigilancia privada
+   Todo en un archivo: HTML + CSS + JS. Usa localStorage como
+   almacenamiento temporal. Ver comentarios "BACKEND:" para
+   los puntos que deberán conectarse a una API real + SQL.
+   ========================================================= */
+:root{
+  --green:#0e6b3a;
+  --green-dark:#0a3d22;
+  --green-neon:#39ff8c;
+  --gray-950:#12161a;
+  --gray-900:#181f1b;
+  --gray-800:#232b26;
+  --gray-700:#333f38;
+  --gray-500:#6b7a72;
+  --gray-200:#e4e9e6;
+  --gray-100:#f3f6f4;
+  --white:#ffffff;
+  --danger:#e5484d;
+  --warn:#e5a93d;
+  --ok:#22c55e;
+  --radius:10px;
+  --shadow:0 2px 10px rgba(0,0,0,.08);
+  font-size:15px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  background:var(--gray-100);
+  color:var(--gray-900);
+  -webkit-font-smoothing:antialiased;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit;cursor:pointer;border:none}
+input,select,textarea{font-family:inherit;font-size:14px}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--gray-200);border-radius:8px}
+
+.hidden{display:none !important}
+
+/* ---------- LOGIN ---------- */
+#login-screen{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(1200px 600px at 20% 10%, #123a26 0%, var(--gray-950) 55%);
+  padding:20px;
+}
+.login-card{
+  width:100%;max-width:380px;background:var(--gray-900);border:1px solid var(--gray-700);
+  border-radius:16px;padding:36px 30px;box-shadow:0 20px 60px rgba(0,0,0,.5);color:var(--white);
+}
+.login-logo{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.login-logo i{color:var(--green-neon);font-size:26px}
+.login-logo span{font-weight:800;font-size:22px;letter-spacing:.2px}
+.login-sub{color:var(--gray-500);font-size:13px;margin-bottom:26px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:12.5px;color:var(--gray-200);margin-bottom:6px;font-weight:600}
+.field input,.field select,.field textarea{
+  width:100%;padding:11px 12px;background:var(--gray-800);border:1px solid var(--gray-700);
+  border-radius:8px;color:var(--white);outline:none;transition:border-color .15s;
+}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--green-neon)}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:11px 18px;border-radius:8px;font-weight:600;font-size:14px;transition:.15s;
+}
+.btn-primary{background:var(--green-neon);color:#04210f}
+.btn-primary:hover{filter:brightness(1.08)}
+.btn-block{width:100%}
+.btn-outline{background:transparent;border:1px solid var(--gray-700);color:var(--white)}
+.btn-outline:hover{border-color:var(--green-neon)}
+.btn-ghost{background:transparent;color:var(--gray-700)}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-sm{padding:6px 10px;font-size:12.5px;border-radius:6px}
+.login-demo{margin-top:22px;border-top:1px solid var(--gray-700);padding-top:16px;font-size:12px;color:var(--gray-500)}
+.login-demo b{color:var(--gray-200)}
+.demo-row{display:flex;justify-content:space-between;padding:4px 0;cursor:pointer}
+.demo-row:hover{color:var(--green-neon)}
+.login-error{background:rgba(229,72,77,.15);color:#ff9a9d;border:1px solid rgba(229,72,77,.4);padding:9px 12px;border-radius:8px;font-size:13px;margin-bottom:14px}
+
+/* ---------- APP SHELL ---------- */
+#app{display:none;min-height:100vh}
+.shell{display:flex;min-height:100vh}
+.sidebar{
+  width:236px;background:var(--gray-950);color:var(--white);display:flex;flex-direction:column;
+  flex-shrink:0;position:fixed;top:0;bottom:0;left:0;z-index:40;transform:translateX(0);transition:transform .2s;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+.brand{display:flex;align-items:center;gap:10px;padding:20px 18px 14px}
+.brand i{color:var(--green-neon);font-size:22px}
+.brand span{font-weight:800;font-size:18px}
+.nav-scroll{overflow-y:auto;flex:1;padding:6px 10px}
+.nav-item{
+  display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:8px;color:var(--gray-200);
+  font-size:13.5px;font-weight:500;margin-bottom:2px;
+}
+.nav-item i{width:18px;text-align:center;color:var(--gray-500)}
+.nav-item:hover{background:var(--gray-900)}
+.nav-item.active{background:var(--green-dark);color:var(--white)}
+.nav-item.active i{color:var(--green-neon)}
+.sidebar-foot{padding:14px 16px;border-top:1px solid var(--gray-800)}
+.user-chip{display:flex;align-items:center;gap:10px}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#fff;flex-shrink:0}
+.user-chip .who{flex:1;min-width:0}
+.user-chip .who .name{font-size:13px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-chip .who .role{font-size:11px;color:var(--gray-500);text-transform:capitalize}
+.logout-btn{color:var(--gray-500);font-size:15px;padding:6px}
+.logout-btn:hover{color:var(--danger)}
+
+.main{flex:1;margin-left:236px;display:flex;flex-direction:column;min-width:0}
+.topbar{
+  display:flex;align-items:center;gap:14px;padding:14px 22px;background:var(--white);
+  border-bottom:1px solid var(--gray-200);position:sticky;top:0;z-index:20;
+  padding-top:calc(14px + env(safe-area-inset-top,0px));
+}
+.hamburger{display:none;font-size:19px;color:var(--gray-900)}
+.page-title{font-size:19px;font-weight:700}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+.bell{position:relative;font-size:17px;color:var(--gray-700)}
+.bell .dot{position:absolute;top:-4px;right:-5px;background:var(--danger);color:#fff;font-size:9.5px;font-weight:700;border-radius:10px;min-width:15px;height:15px;display:flex;align-items:center;justify-content:center;padding:0 3px}
+.content{padding:22px;flex:1}
+
+@media (max-width:960px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0)}
+  .main{margin-left:0}
+  .hamburger{display:block}
+  .content{padding:14px}
+  .topbar{padding:12px 14px}
+}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:35;display:none}
+.overlay.show{display:block}
+
+/* ---------- CARDS / STATS ---------- */
+.grid{display:grid;gap:16px}
+.stat-grid{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:20px}
+.stat-card{background:var(--white);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow);border:1px solid var(--gray-200);display:flex;flex-direction:column;gap:6px}
+.stat-card .top{display:flex;align-items:center;justify-content:space-between}
+.stat-card .icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px}
+.stat-card .value{font-size:25px;font-weight:800}
+.stat-card .label{font-size:12.5px;color:var(--gray-500);font-weight:600}
+.ic-green{background:#e6f7ec;color:var(--green)}
+.ic-red{background:#fde8e8;color:var(--danger)}
+.ic-yellow{background:#fdf3dc;color:#b6841f}
+.ic-gray{background:var(--gray-200);color:var(--gray-700)}
+
+.panel{background:var(--white);border-radius:var(--radius);border:1px solid var(--gray-200);box-shadow:var(--shadow);margin-bottom:18px}
+.panel-head{display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--gray-200);flex-wrap:wrap;gap:10px}
+.panel-head h3{font-size:15px;font-weight:700}
+.panel-body{padding:16px 18px}
+.two-col{grid-template-columns:1.3fr 1fr}
+@media (max-width:1100px){.two-col{grid-template-columns:1fr}}
+
+/* ---------- BADGES ---------- */
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:20px}
+.b-green{background:#e6f7ec;color:#0e6b3a}
+.b-red{background:#fde8e8;color:#c92a2a}
+.b-yellow{background:#fdf3dc;color:#a3730d}
+.b-gray{background:var(--gray-200);color:var(--gray-700)}
+.b-blue{background:#e5edfd;color:#2255c4}
+.dot-status{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+/* ---------- TABLE ---------- */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:600px}
+th{text-align:left;padding:10px 12px;color:var(--gray-500);font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid var(--gray-200);white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--gray-100);vertical-align:middle}
+tr:hover td{background:#fafcfb}
+.row-actions{display:flex;gap:6px}
+.icon-btn{width:30px;height:30px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;background:var(--gray-100);color:var(--gray-700);font-size:12.5px}
+.icon-btn:hover{background:var(--gray-200)}
+.icon-btn.del:hover{background:#fde8e8;color:var(--danger)}
+.empty-state{text-align:center;padding:44px 16px;color:var(--gray-500)}
+.empty-state i{font-size:30px;margin-bottom:10px;color:var(--gray-200)}
+
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.search-box{position:relative;flex:1;min-width:180px}
+.search-box i{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--gray-500);font-size:13px}
+.search-box input{width:100%;padding:9px 12px 9px 32px;border:1px solid var(--gray-200);border-radius:8px;background:var(--white)}
+.select-filter{padding:9px 10px;border:1px solid var(--gray-200);border-radius:8px;background:var(--white)}
+
+/* ---------- MODAL ---------- */
+.modal-bg{position:fixed;inset:0;background:rgba(10,15,12,.55);display:none;align-items:center;justify-content:center;z-index:100;padding:16px}
+.modal-bg.show{display:flex}
+.modal{background:var(--white);border-radius:14px;width:100%;max-width:560px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--gray-200)}
+.modal-head h3{font-size:16px;font-weight:700}
+.modal-close{font-size:16px;color:var(--gray-500);width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:8px}
+.modal-close:hover{background:var(--gray-100)}
+.modal-body{padding:18px 20px;overflow-y:auto}
+.modal-foot{padding:14px 20px;border-top:1px solid var(--gray-200);display:flex;justify-content:flex-end;gap:10px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:520px){.form-grid{grid-template-columns:1fr}}
+.form-grid .full{grid-column:1/-1}
+.fg label{display:block;font-size:12px;font-weight:600;color:var(--gray-700);margin-bottom:5px}
+.fg input,.fg select,.fg textarea{width:100%;padding:9px 11px;border:1px solid var(--gray-200);border-radius:8px;background:var(--gray-100);outline:none}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--green);background:#fff}
+.fg textarea{resize:vertical;min-height:64px}
+
+/* ---------- TOASTS ---------- */
+#toasts{position:fixed;bottom:18px;right:18px;z-index:200;display:flex;flex-direction:column;gap:10px;max-width:320px}
+.toast{background:var(--gray-950);color:#fff;padding:12px 14px;border-radius:10px;font-size:13px;display:flex;gap:10px;align-items:flex-start;box-shadow:0 10px 30px rgba(0,0,0,.3);animation:toastIn .2s ease}
+.toast i{margin-top:1px}
+.toast.ok i{color:var(--ok)} .toast.err i{color:var(--danger)} .toast.warn i{color:var(--warn)}
+@keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ---------- GUARD MOBILE PANEL ---------- */
+.guard-wrap{max-width:460px;margin:0 auto}
+.guard-hero{background:linear-gradient(160deg,var(--green-dark),var(--gray-950));color:#fff;border-radius:16px;padding:22px;margin-bottom:16px}
+.guard-hero .hello{font-size:13px;color:#b9c9c0}
+.guard-hero .shiftname{font-size:19px;font-weight:800;margin-top:2px}
+.guard-info-row{display:flex;gap:18px;margin-top:16px;flex-wrap:wrap}
+.guard-info-row div{flex:1;min-width:110px}
+.guard-info-row .lbl{font-size:11px;color:#9fb3a8;text-transform:uppercase;letter-spacing:.04em}
+.guard-info-row .val{font-size:14px;font-weight:700;margin-top:2px}
+.countdown-card{background:#fff;border:1px solid var(--gray-200);border-radius:16px;padding:22px;text-align:center;margin-bottom:16px}
+.countdown-card .cd-label{font-size:12.5px;color:var(--gray-500);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.countdown-card .cd-time{font-size:44px;font-weight:800;font-variant-numeric:tabular-nums;margin:8px 0;color:var(--green-dark)}
+.countdown-card .cd-time.urgent{color:var(--danger)}
+.confirm-btn{width:100%;padding:18px;border-radius:14px;background:var(--green-neon);color:#053018;font-weight:800;font-size:16px;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 10px 24px rgba(57,255,140,.35)}
+.confirm-btn:active{transform:scale(.98)}
+.confirm-btn:disabled{opacity:.5;box-shadow:none}
+.quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+.quick-btn{background:#fff;border:1px solid var(--gray-200);border-radius:12px;padding:16px 10px;display:flex;flex-direction:column;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:var(--gray-900)}
+.quick-btn i{font-size:19px;color:var(--green)}
+.quick-btn:hover{border-color:var(--green)}
+.no-shift{text-align:center;padding:50px 16px;color:var(--gray-500)}
+.no-shift i{font-size:34px;margin-bottom:12px;color:var(--gray-200)}
+
+/* ---------- MAP ---------- */
+#map{height:520px;border-radius:var(--radius);width:100%}
+.map-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--gray-700);margin-top:10px}
+.map-legend span{display:flex;align-items:center;gap:6px}
+
+/* ---------- KANBAN / MISC ---------- */
+.tag-pill{display:inline-block;padding:2px 8px;border-radius:5px;background:var(--gray-100);font-size:11.5px;font-weight:600;color:var(--gray-700)}
+.progress-bar{height:7px;border-radius:6px;background:var(--gray-200);overflow:hidden}
+.progress-bar > div{height:100%;background:var(--green)}
+.mini-note{font-size:12px;color:var(--gray-500)}
+.divider{height:1px;background:var(--gray-200);margin:14px 0}
+.flex-between{display:flex;align-items:center;justify-content:space-between}
+.text-right{text-align:right}
+</style>
+</head>
+<body>
+
+<!-- ===================== LOGIN ===================== -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo"><i class="fa-solid fa-shield-halved"></i><span>VigilPro</span></div>
+    <div class="login-sub">Control y supervisión de vigilancia privada</div>
+    <div id="login-error" class="login-error hidden"></div>
+    <form id="login-form">
+      <div class="field"><label>Usuario</label><input id="login-user" autocomplete="username" required></div>
+      <div class="field"><label>Contraseña</label><input id="login-pass" type="password" autocomplete="current-password" required></div>
+      <button class="btn btn-primary btn-block" type="submit" id="login-submit-btn" disabled><i class="fa-solid fa-circle-notch fa-spin"></i> Conectando con Supabase...</button>
+    </form>
+    <div class="login-demo">
+      <b>Acceso</b> con tu usuario y contraseña asignados por tu administrador.
+    </div>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="app">
+  <div class="shell">
+    <div class="overlay" id="overlay"></div>
+    <aside class="sidebar" id="sidebar">
+      <div class="brand"><i class="fa-solid fa-shield-halved"></i><span>VigilPro</span></div>
+      <nav class="nav-scroll" id="nav-menu"></nav>
+      <div class="sidebar-foot">
+        <div class="user-chip">
+          <div class="avatar" id="side-avatar">A</div>
+          <div class="who"><div class="name" id="side-name">—</div><div class="role" id="side-role">—</div></div>
+          <button class="logout-btn" id="logout-btn" title="Cerrar sesión"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
+        </div>
+      </div>
+    </aside>
+    <div class="main">
+      <div class="topbar">
+        <button class="hamburger" id="hamburger"><i class="fa-solid fa-bars"></i></button>
+        <div class="page-title" id="page-title">Dashboard</div>
+        <div class="topbar-right">
+          <div class="bell" id="bell-btn"><i class="fa-solid fa-bell"></i><span class="dot hidden" id="bell-count">0</span></div>
+        </div>
+      </div>
+      <div class="content" id="content"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <div class="modal-head"><h3 id="modal-title">Título</h3><button class="modal-close" id="modal-close"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-foot" id="modal-foot"></div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   1. CAPA DE DATOS (Supabase)
+   La app usa Supabase (Postgres + API REST) como backend real.
+   Para no reescribir todo el motor de renderizado (que llama a
+   loadData/saveData de forma síncrona en decenas de sitios), se
+   mantiene una CACHÉ en memoria que se hidrata desde Supabase al
+   arrancar y se sincroniza en segundo plano en cada escritura y
+   cada poll (ver sección 21). loadData/saveData conservan la
+   misma firma que antes; solo cambia qué hay "detrás".
+   Todas las filas se guardan en una única tabla genérica
+   `app_records` (store, id, data jsonb) — ver supabase-schema.sql.
+   BACKEND: para una versión productiva se recomienda migrar a
+   tablas relacionadas reales (ver schema.sql) con supabase-js
+   haciendo consultas por tabla en vez de este almacén genérico.
+   ========================================================= */
+const LS_KEYS = ["app_users","app_companies","app_sites","app_guards","app_supervisors","app_zones",
+  "app_posts","app_shifts","app_lifereports","app_rounds","app_roundchecks","app_alerts","app_incidents",
+  "app_news","app_history","app_settings"];
+
+const SUPABASE_URL = "https://lwokourabnjjtxpyzxlf.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3b2tvdXJhYm5qanR4cHl6eGxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxMTM3MjAsImV4cCI6MjEwNTY4OTcyMH0.5z648exL8y-KxnJvgCOpHBfE2YlQuqX8hbhFEgN7Gcc";
+// NOTA DE SEGURIDAD: esta clave "anon" queda visible en el HTML del cliente (es pública por
+// diseño de Supabase), y la tabla app_records se creó con políticas RLS abiertas para que la
+// demo funcione sin backend propio. Eso significa que CUALQUIERA con este archivo puede leer
+// y escribir los datos del proyecto. Antes de usar esto en producción, restringe las políticas
+// RLS (por ejemplo exigiendo supabase auth) o pon un backend intermedio delante de la base.
+const sb = (window.supabase && window.supabase.createClient)
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
+let CACHE = {};
+LS_KEYS.forEach(k=>CACHE[k]=[]);
+
+async function initCache(){
+  LS_KEYS.forEach(k=>CACHE[k]=[]);
+  if(!sb){ toast("err","No se pudo cargar la librería de Supabase (revisa tu conexión a internet)"); return false; }
+  const { data, error } = await sb.from("app_records").select("store,id,data");
+  if(error){
+    console.error("Supabase initCache error", error);
+    toast("err","No se pudo conectar con Supabase: "+error.message+". Verifica que ejecutaste supabase-schema.sql");
+    return false;
+  }
+  (data||[]).forEach(row=>{
+    if(!CACHE[row.store]) CACHE[row.store]=[];
+    CACHE[row.store].push(row.data);
+  });
+  return true;
+}
+function loadData(key){
+  return CACHE[key] || [];
+}
+function saveData(key, data){
+  CACHE[key] = data;
+  pushToSupabase(key, data); // fire-and-forget: la UI ya se actualizó de forma optimista desde la caché
+  return true;
+}
+async function pushToSupabase(key, data){
+  if(!sb || !data || !data.length) return true;
+  const rows = data.map(d=>({ store:key, id:String(d.id), data:d, updated_at:new Date().toISOString() }));
+  const { error } = await sb.from("app_records").upsert(rows, { onConflict:"store,id" });
+  if(error){ console.error("Supabase upsert error", key, error); toast("err","Error guardando '"+key+"' en Supabase: "+error.message); return false; }
+  return true;
+}
+function generateId(prefix){
+  return (prefix?prefix+"_":"") + Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+}
+async function resetDatabase(){
+  if(sb){
+    const { error } = await sb.from("app_records").delete().in("store", LS_KEYS);
+    if(error){ toast("err","No se pudo limpiar Supabase: "+error.message); return; }
+  }
+  LS_KEYS.forEach(k=>CACHE[k]=[]);
+  seedDatabase();
+  toast("ok","Todos los datos fueron borrados. Se recrearon solo las cuentas de acceso.");
+  setTimeout(()=>location.reload(), 600); // da tiempo a que las escrituras lleguen a Supabase
+}
+
+/* ---------- Helpers de fecha/hora ---------- */
+function pad(n){return n.toString().padStart(2,"0")}
+function todayStr(){const d=new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`}
+function nowTimeStr(){const d=new Date();return `${pad(d.getHours())}:${pad(d.getMinutes())}`}
+function fmtDT(dateStr,timeStr){return new Date(`${dateStr}T${timeStr}:00`)}
+function minutesBetween(a,b){return Math.round((b-a)/60000)}
+function escapeHTML(str){
+  if(str===undefined||str===null) return "";
+  return String(str).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function haversine(lat1,lon1,lat2,lon2){
+  if([lat1,lon1,lat2,lon2].some(v=>v===undefined||v===null||isNaN(v))) return null;
+  const R=6371000, toRad=d=>d*Math.PI/180;
+  const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
+  const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+/* ---------- Datos iniciales (solo cuentas de acceso) ---------- */
+function seedDatabase(){
+  if(CACHE["app_users"] && CACHE["app_users"].length) return; // ya hay datos en Supabase
+
+  // Solo se crean las 3 cuentas de acceso necesarias para poder entrar al sistema.
+  // Ya NO se generan empresas, sedes, vigilantes, turnos, rondas, alertas ni historial
+  // de ejemplo: la base de datos arranca limpia y todo se crea desde la interfaz.
+  const users=[
+    {id:"u1",username:"admin",password:"admin123",role:"admin",name:"Administrador",linkedId:null,status:"activo"},
+    {id:"u2",username:"supervisor",password:"supervisor123",role:"supervisor",name:"Supervisor",linkedId:null,status:"activo"},
+    {id:"u3",username:"vigilante",password:"vigilante123",role:"vigilante",name:"Vigilante",linkedId:null,status:"activo"}
+  ];
+  const settings={ homeLifeDefaultInterval:30, homeLifeDefaultTolerance:5, gpsRequired:true, photoRequired:false, zoneRequired:true, refreshSeconds:15 };
+
+  saveData("app_users",users); saveData("app_companies",[]); saveData("app_sites",[]);
+  saveData("app_guards",[]); saveData("app_supervisors",[]); saveData("app_zones",[]);
+  saveData("app_posts",[]); saveData("app_shifts",[]); saveData("app_lifereports",[]);
+  saveData("app_rounds",[]); saveData("app_roundchecks",[]); saveData("app_alerts",[]);
+  saveData("app_incidents",[]); saveData("app_news",[]); saveData("app_history",[]);
+  saveData("app_settings",settings);
+}
+
+/* =========================================================
+   2. GENERACIÓN DE REPORTES HOMBRE VIVO
+   ========================================================= */
+function generateLifeReportsForToday(){
+  const shifts = loadData("app_shifts").filter(s=>s.date===todayStr() && (s.status==="en_curso"||s.status==="programado"));
+  const reports = loadData("app_lifereports");
+  shifts.forEach(shift=>{
+    const existing = reports.filter(r=>r.shiftId===shift.id);
+    if(existing.length>0) return; // ya generados
+    const start = fmtDT(shift.date, shift.startTime);
+    let end = fmtDT(shift.date, shift.endTime);
+    if(end<=start) end = new Date(end.getTime()+24*3600*1000); // turno que cruza medianoche
+    let t = new Date(start.getTime()+shift.interval*60000);
+    while(t<end){
+      reports.push({
+        id:generateId("lr"), guardId:shift.guardId, shiftId:shift.id,
+        date: shift.date, scheduledTime: `${pad(t.getHours())}:${pad(t.getMinutes())}`,
+        scheduledAt: t.getTime(),
+        actualTime:null, zoneId:shift.zoneId, lat:null, lng:null,
+        status:"pendiente", diffMinutes:null, device:null, notes:null
+      });
+      t = new Date(t.getTime()+shift.interval*60000);
+    }
+  });
+  saveData("app_lifereports", reports);
+}
+
+/* =========================================================
+   3. REGLAS DE ESTADO HOMBRE VIVO / VERIFICACIÓN PERIÓDICA
+   ========================================================= */
+function checkLifeReportsAndAlerts(){
+  const reports = loadData("app_lifereports");
+  const shifts = loadData("app_shifts");
+  const alerts = loadData("app_alerts");
+  const history = loadData("app_history");
+  const now = Date.now();
+  let changed=false, alertsChanged=false;
+
+  reports.forEach(r=>{
+    if(r.status!=="pendiente") return;
+    const shift = shifts.find(s=>s.id===r.shiftId);
+    const tol = shift ? shift.tolerance : 5;
+    const deadline = r.scheduledAt + tol*60000;
+    if(now > deadline){
+      r.status="vencido"; changed=true;
+      const guard = loadData("app_guards").find(g=>g.id===r.guardId);
+      const zone = loadData("app_zones").find(z=>z.id===r.zoneId);
+      const post = loadData("app_posts").find(p=>p.id===(shift?shift.postId:null));
+      const already = alerts.find(a=>a.lifeReportId===r.id);
+      if(!already){
+        alerts.push({
+          id:generateId("al"), level:"critica", type:"hombre_vivo_vencido",
+          title:"Reporte Hombre Vivo vencido",
+          guardId:r.guardId, zoneId:r.zoneId, postId: post?post.id:null,
+          scheduledTime:r.scheduledTime, date:r.date,
+          supervisorId: shift?shift.supervisorId:null,
+          lifeReportId:r.id, status:"activa",
+          createdAt: now
+        });
+        alertsChanged=true;
+        history.push({id:generateId("h"),type:"reporte_vencido",
+          description:`Reporte Hombre Vivo vencido - ${guard?guard.firstName+" "+guard.lastName:r.guardId} (${zone?zone.name:""})`,
+          date:todayStr(), time:nowTimeStr()});
+      }
+    }
+  });
+  if(changed) saveData("app_lifereports", reports);
+  if(alertsChanged){ saveData("app_alerts", alerts); saveData("app_history", history); }
+  return changed||alertsChanged;
+}
+
+/* =========================================================
+   4. AUTENTICACIÓN
+   BACKEND: reemplazar por autenticación real (hash, sesión/JWT).
+   Las contraseñas en texto plano son solo para esta demo.
+   ========================================================= */
+let CURRENT_USER=null;
+
+function attemptLogin(username,password){
+  const users=loadData("app_users");
+  const u=users.find(x=>x.username===username && x.password===password && x.status==="activo");
+  if(!u) return null;
+  CURRENT_USER=u;
+  sessionStorage.setItem("app_session", JSON.stringify(u));
+  const history=loadData("app_history");
+  history.push({id:generateId("h"),type:"login",description:`Inicio de sesión: ${u.name} (${u.role})`,date:todayStr(),time:nowTimeStr()});
+  saveData("app_history",history);
+  return u;
+}
+function restoreSession(){
+  const raw=sessionStorage.getItem("app_session");
+  if(raw){ try{ CURRENT_USER=JSON.parse(raw); return true; }catch(e){} }
+  return false;
+}
+function logout(){
+  sessionStorage.removeItem("app_session");
+  CURRENT_USER=null;
+  location.reload();
+}
+
+/* =========================================================
+   5. TOASTS
+   ========================================================= */
+function toast(kind,msg){
+  const wrap=document.getElementById("toasts");
+  const el=document.createElement("div");
+  el.className="toast "+kind;
+  const icon = kind==="ok"?"fa-circle-check":kind==="err"?"fa-circle-xmark":"fa-triangle-exclamation";
+  el.innerHTML=`<i class="fa-solid ${icon}"></i><span>${escapeHTML(msg)}</span>`;
+  wrap.appendChild(el);
+  setTimeout(()=>{el.style.opacity="0";el.style.transition="opacity .3s";setTimeout(()=>el.remove(),300)},3200);
+}
+
+/* =========================================================
+   6. MODAL GENÉRICO
+   ========================================================= */
+function openModal(title,bodyHTML,footHTML){
+  document.getElementById("modal-title").textContent=title;
+  document.getElementById("modal-body").innerHTML=bodyHTML;
+  document.getElementById("modal-foot").innerHTML=footHTML||"";
+  document.getElementById("modal-bg").classList.add("show");
+}
+function closeModal(){ document.getElementById("modal-bg").classList.remove("show"); }
+document.getElementById("modal-close").onclick=closeModal;
+document.getElementById("modal-bg").addEventListener("click",e=>{ if(e.target.id==="modal-bg") closeModal(); });
+
+function confirmDialog(msg,onYes){
+  openModal("Confirmar acción", `<p style="font-size:14px;color:var(--gray-700)">${escapeHTML(msg)}</p>`,
+    `<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+     <button class="btn btn-danger" id="confirm-yes-btn">Sí, continuar</button>`);
+  document.getElementById("confirm-yes-btn").onclick=()=>{ closeModal(); onYes(); };
+}
+
+/* =========================================================
+   7. CONFIGURACIÓN DE ENTIDADES (CRUD genérico)
+   Cada entidad define sus campos; se usa para generar
+   automáticamente tablas y formularios modales.
+   ========================================================= */
+const ENTITIES = {
+  companies:{ label:"Empresas", icon:"fa-building", roles:["admin"],
+    fields:[
+      {key:"name",label:"Nombre",type:"text",required:true},
+      {key:"nit",label:"NIT",type:"text",required:true},
+      {key:"phone",label:"Teléfono",type:"text"},
+      {key:"email",label:"Correo",type:"email"},
+      {key:"address",label:"Dirección",type:"text",full:true},
+      {key:"status",label:"Estado",type:"select",options:["activo","inactivo"]}
+    ], columns:["name","nit","phone","email","status"]},
+
+  sites:{ label:"Sedes", icon:"fa-map-location-dot", roles:["admin"],
+    fields:[
+      {key:"name",label:"Nombre",type:"text",required:true},
+      {key:"companyId",label:"Empresa",type:"ref",ref:"companies",refLabel:"name"},
+      {key:"city",label:"Ciudad",type:"text"},
+      {key:"address",label:"Dirección",type:"text",full:true},
+      {key:"lat",label:"Latitud",type:"number",step:"any"},
+      {key:"lng",label:"Longitud",type:"number",step:"any"},
+      {key:"status",label:"Estado",type:"select",options:["activo","inactivo"]}
+    ], columns:["name","city","address","status"]},
+
+  zones:{ label:"Zonas", icon:"fa-draw-polygon", roles:["admin"],
+    fields:[
+      {key:"name",label:"Nombre",type:"text",required:true},
+      {key:"code",label:"Código",type:"text"},
+      {key:"siteId",label:"Sede",type:"ref",ref:"sites",refLabel:"name"},
+      {key:"description",label:"Descripción",type:"text",full:true},
+      {key:"lat",label:"Latitud",type:"number",step:"any"},
+      {key:"lng",label:"Longitud",type:"number",step:"any"},
+      {key:"radius",label:"Radio GPS (m)",type:"number"},
+      {key:"status",label:"Estado",type:"select",options:["activo","inactivo"]}
+    ], columns:["name","code","siteId","radius","status"]},
+
+  posts:{ label:"Puestos", icon:"fa-location-dot", roles:["admin"],
+    fields:[
+      {key:"name",label:"Nombre",type:"text",required:true},
+      {key:"code",label:"Código",type:"text"},
+      {key:"siteId",label:"Sede",type:"ref",ref:"sites",refLabel:"name"},
+      {key:"zoneId",label:"Zona",type:"ref",ref:"zones",refLabel:"name"},
+      {key:"description",label:"Descripción",type:"text",full:true},
+      {key:"lat",label:"Latitud",type:"number",step:"any"},
+      {key:"lng",label:"Longitud",type:"number",step:"any"},
+      {key:"radius",label:"Radio permitido (m)",type:"number"},
+      {key:"status",label:"Estado",type:"select",options:["activo","inactivo"]}
+    ], columns:["name","code","siteId","zoneId","status"]},
+
+  supervisors:{ label:"Supervisores", icon:"fa-user-tie", roles:["admin"],
+    fields:[
+      {key:"name",label:"Nombre completo",type:"text",required:true},
+      {key:"document",label:"Documento",type:"text"},
+      {key:"phone",label:"Teléfono",type:"text"},
+      {key:"email",label:"Correo",type:"email"},
+      {key:"siteId",label:"Sede",type:"ref",ref:"sites",refLabel:"name"},
+      {key:"status",label:"Estado",type:"select",options:["activo","inactivo"]}
+    ], columns:["name","document","phone","siteId","status"]},
+
+  guards:{ label:"Vigilantes", icon:"fa-user-shield", roles:["admin"],
+    fields:[
+      {key:"firstName",label:"Nombres",type:"text",required:true},
+      {key:"lastName",label:"Apellidos",type:"text",required:true},
+      {key:"document",label:"Documento",type:"text",required:true},
+      {key:"code",label:"Código interno",type:"text"},
+      {key:"phone",label:"Teléfono",type:"text"},
+      {key:"email",label:"Correo",type:"email"},
+      {key:"position",label:"Cargo",type:"text"},
+      {key:"siteId",label:"Sede",type:"ref",ref:"sites",refLabel:"name"},
+      {key:"hireDate",label:"Fecha de ingreso",type:"date"},
+      {key:"status",label:"Estado",type:"select",options:["activo","inactivo"]}
+    ], columns:["firstName","lastName","document","code","siteId","status"]},
+
+  shifts:{ label:"Turnos", icon:"fa-clock", roles:["admin"],
+    fields:[
+      {key:"guardId",label:"Vigilante",type:"ref",ref:"guards",refLabel:g=>g.firstName+" "+g.lastName,required:true},
+      {key:"supervisorId",label:"Supervisor",type:"ref",ref:"supervisors",refLabel:"name"},
+      {key:"postId",label:"Puesto",type:"ref",ref:"posts",refLabel:"name",required:true},
+      {key:"zoneId",label:"Zona",type:"ref",ref:"zones",refLabel:"name",required:true},
+      {key:"date",label:"Fecha",type:"date",required:true},
+      {key:"startTime",label:"Hora inicio",type:"time",required:true},
+      {key:"endTime",label:"Hora fin",type:"time",required:true},
+      {key:"interval",label:"Intervalo Hombre Vivo (min)",type:"number",required:true},
+      {key:"tolerance",label:"Tolerancia (min)",type:"number",required:true},
+      {key:"status",label:"Estado",type:"select",options:["programado","en_curso","finalizado","cancelado","incumplido"]}
+    ], columns:["guardId","postId","date","startTime","endTime","status"]},
+
+  news:{ label:"Novedades", icon:"fa-note-sticky", roles:["admin","supervisor","vigilante"],
+    fields:[
+      {key:"type",label:"Tipo",type:"select",options:["Infraestructura","Puerta","Iluminación","Cámara","Vehículo","Acceso","Personal","Otro"],required:true},
+      {key:"title",label:"Título",type:"text",required:true},
+      {key:"description",label:"Descripción",type:"textarea",full:true},
+      {key:"zoneId",label:"Zona",type:"ref",ref:"zones",refLabel:"name"},
+      {key:"priority",label:"Prioridad",type:"select",options:["baja","media","alta"]},
+      {key:"status",label:"Estado",type:"select",options:["abierta","atendida","cerrada"]}
+    ], columns:["type","title","zoneId","priority","status"]},
+
+  incidents:{ label:"Incidentes", icon:"fa-triangle-exclamation", roles:["admin","supervisor","vigilante"],
+    fields:[
+      {key:"type",label:"Tipo",type:"text",required:true},
+      {key:"description",label:"Descripción",type:"textarea",full:true,required:true},
+      {key:"zoneId",label:"Zona",type:"ref",ref:"zones",refLabel:"name"},
+      {key:"priority",label:"Prioridad",type:"select",options:["baja","media","alta","crítica"]},
+      {key:"status",label:"Estado",type:"select",options:["abierto","en_revision","atendido","cerrado"]}
+    ], columns:["type","description","zoneId","priority","status"]}
+};
+
+/* ---------- utilidades de referencia ---------- */
+function refOptions(entityKey){ return loadData("app_"+entityKey); }
+function refLabelOf(entityKey,id){
+  const list = loadData("app_"+entityKey);
+  const item = list.find(x=>x.id===id);
+  if(!item) return "—";
+  const cfg = ENTITIES[entityKey];
+  if(cfg && typeof cfg.fields?.[0]?.refLabel === "function") {}
+  if(entityKey==="guards") return item.firstName+" "+item.lastName;
+  return item.name || item.title || id;
+}
+
+/* =========================================================
+   8. RENDER: FORMULARIO / TABLA CRUD GENÉRICOS
+   ========================================================= */
+function fieldInputHTML(entityKey,field,value){
+  value = value===undefined||value===null?"":value;
+  if(field.type==="select"){
+    return `<select data-field="${field.key}">${field.options.map(o=>`<option value="${escapeHTML(o)}" ${o===value?"selected":""}>${escapeHTML(o)}</option>`).join("")}</select>`;
+  }
+  if(field.type==="ref"){
+    const list = loadData("app_"+field.ref);
+    const opts = list.map(item=>{
+      const lbl = typeof field.refLabel==="function" ? field.refLabel(item) : item[field.refLabel];
+      return `<option value="${item.id}" ${item.id===value?"selected":""}>${escapeHTML(lbl)}</option>`;
+    }).join("");
+    return `<select data-field="${field.key}"><option value="">— Seleccionar —</option>${opts}</select>`;
+  }
+  if(field.type==="textarea"){
+    return `<textarea data-field="${field.key}">${escapeHTML(value)}</textarea>`;
+  }
+  return `<input data-field="${field.key}" type="${field.type}" ${field.step?`step="${field.step}"`:""} value="${escapeHTML(value)}">`;
+}
+
+function openEntityForm(entityKey,recordId){
+  const cfg = ENTITIES[entityKey];
+  const data = loadData("app_"+entityKey);
+  const record = recordId ? data.find(r=>r.id===recordId) : {};
+  const isEdit = !!recordId;
+  const fieldsHTML = cfg.fields.map(f=>`
+    <div class="fg ${f.full?'full':''}"><label>${f.label}${f.required?' *':''}</label>${fieldInputHTML(entityKey,f,record[f.key])}</div>
+  `).join("");
+  openModal((isEdit?"Editar ":"Nuevo ")+cfg.label.replace(/s$/,""),
+    `<div class="form-grid">${fieldsHTML}</div>`,
+    `<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+     <button class="btn btn-primary" id="save-entity-btn"><i class="fa-solid fa-check"></i> Guardar</button>`
+  );
+  document.getElementById("save-entity-btn").onclick=()=>{
+    const body=document.getElementById("modal-body");
+    const values={};
+    let valid=true;
+    cfg.fields.forEach(f=>{
+      const el=body.querySelector(`[data-field="${f.key}"]`);
+      const v=el.value;
+      if(f.required && !v){ valid=false; el.style.borderColor="var(--danger)"; }
+      values[f.key] = (f.type==="number") ? (v===""?null:parseFloat(v)) : v;
+    });
+    if(!valid){ toast("err","Completa los campos obligatorios"); return; }
+    if(isEdit){
+      Object.assign(record,values);
+    } else {
+      values.id = generateId(entityKey.slice(0,2));
+      if(entityKey==="news"||entityKey==="incidents"){ values.date=todayStr(); values.time=nowTimeStr(); values.guardId = CURRENT_USER.role==="vigilante"?CURRENT_USER.linkedId:null; }
+      data.push(values);
+    }
+    saveData("app_"+entityKey, data);
+    pushHistory(entityKey, isEdit?"actualizado":"creado");
+    closeModal();
+    toast("ok",cfg.label.replace(/s$/,"")+(isEdit?" actualizado":" creado")+" correctamente");
+    navigate(currentRoute);
+  };
+}
+
+function pushHistory(entityKey,action){
+  const h=loadData("app_history");
+  h.push({id:generateId("h"),type:"cambio_admin",description:`Registro de ${ENTITIES[entityKey]?.label||entityKey} ${action}`,date:todayStr(),time:nowTimeStr()});
+  saveData("app_history",h);
+}
+
+function deleteEntity(entityKey,id){
+  confirmDialog("¿Deseas eliminar/desactivar este registro?", ()=>{
+    let data=loadData("app_"+entityKey);
+    const idx=data.findIndex(r=>r.id===id);
+    if(idx>-1){
+      if("status" in data[idx]) data[idx].status="inactivo"; else data.splice(idx,1);
+    }
+    saveData("app_"+entityKey,data);
+    pushHistory(entityKey,"desactivado");
+    toast("ok","Registro desactivado");
+    navigate(currentRoute);
+  });
+}
+
+function renderCell(entityKey,field,value){
+  if(field.type==="ref") return escapeHTML(refLabelOf(field.ref,value));
+  if(field.key==="status") return statusBadge(value);
+  if(field.key==="priority") return priorityBadge(value);
+  return escapeHTML(value);
+}
+function statusBadge(v){
+  const map={activo:"b-green",inactivo:"b-gray",programado:"b-blue",en_curso:"b-green",finalizado:"b-gray",
+    cancelado:"b-red",incumplido:"b-red",abierta:"b-yellow",abierto:"b-yellow",atendida:"b-green",atendido:"b-green",
+    cerrada:"b-gray",cerrado:"b-gray",en_revision:"b-yellow",pendiente:"b-yellow",reportado:"b-green",tarde:"b-yellow",vencido:"b-red",activa:"b-red"};
+  return `<span class="badge ${map[v]||'b-gray'}">${escapeHTML((v||"—").replace(/_/g," "))}</span>`;
+}
+function priorityBadge(v){
+  const map={baja:"b-gray",media:"b-yellow",alta:"b-red","crítica":"b-red"};
+  return `<span class="badge ${map[v]||'b-gray'}">${escapeHTML(v||"—")}</span>`;
+}
+
+function renderEntitySection(entityKey,titleOverride){
+  const cfg = ENTITIES[entityKey];
+  const data = loadData("app_"+entityKey);
+  const canEdit = CURRENT_USER.role==="admin" || (entityKey==="news"||entityKey==="incidents");
+  const rows = data.map(r=>`
+    <tr>
+      ${cfg.columns.map(c=>`<td>${renderCell(entityKey,cfg.fields.find(f=>f.key===c),r[c])}</td>`).join("")}
+      <td class="row-actions">
+        <button class="icon-btn" onclick="openEntityForm('${entityKey}','${r.id}')" title="Editar"><i class="fa-solid fa-pen"></i></button>
+        ${CURRENT_USER.role==="admin"?`<button class="icon-btn del" onclick="deleteEntity('${entityKey}','${r.id}')" title="Eliminar"><i class="fa-solid fa-trash"></i></button>`:""}
+      </td>
+    </tr>`).join("");
+
+  return `
+  <div class="panel">
+    <div class="panel-head">
+      <h3><i class="fa-solid ${cfg.icon}"></i> ${titleOverride||cfg.label}</h3>
+      ${canEdit?`<button class="btn btn-primary btn-sm" onclick="openEntityForm('${entityKey}')"><i class="fa-solid fa-plus"></i> Nuevo</button>`:""}
+    </div>
+    <div class="panel-body">
+      <div class="toolbar">
+        <div class="search-box"><i class="fa-solid fa-magnifying-glass"></i><input placeholder="Buscar..." oninput="filterTable(this,'entity-table-${entityKey}')"></div>
+      </div>
+      <div class="table-wrap">
+        <table id="entity-table-${entityKey}">
+          <thead><tr>${cfg.columns.map(c=>`<th>${cfg.fields.find(f=>f.key===c).label}</th>`).join("")}<th>Acciones</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="${cfg.columns.length+1}"><div class="empty-state"><i class="fa-solid fa-inbox"></i><div>No hay registros aún</div></div></td></tr>`}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+function filterTable(input,tableId){
+  const q=input.value.toLowerCase();
+  document.querySelectorAll(`#${tableId} tbody tr`).forEach(tr=>{
+    tr.style.display = tr.textContent.toLowerCase().includes(q) ? "" : "none";
+  });
+}
+
+/* =========================================================
+   9. NAVEGACIÓN / ROUTER
+   ========================================================= */
+const NAV_ITEMS = {
+  admin:[
+    {route:"dashboard",label:"Dashboard",icon:"fa-gauge-high"},
+    {route:"guards",label:"Vigilantes",icon:"fa-user-shield"},
+    {route:"supervisors",label:"Supervisores",icon:"fa-user-tie"},
+    {route:"companies",label:"Empresas",icon:"fa-building"},
+    {route:"sites",label:"Sedes",icon:"fa-map-location-dot"},
+    {route:"posts",label:"Puestos",icon:"fa-location-dot"},
+    {route:"zones",label:"Zonas",icon:"fa-draw-polygon"},
+    {route:"shifts",label:"Turnos",icon:"fa-clock"},
+    {route:"lifereports",label:"Hombre Vivo",icon:"fa-heart-pulse"},
+    {route:"alerts",label:"Alertas",icon:"fa-bell"},
+    {route:"rounds",label:"Rondas",icon:"fa-route"},
+    {route:"news",label:"Novedades",icon:"fa-note-sticky"},
+    {route:"incidents",label:"Incidentes",icon:"fa-triangle-exclamation"},
+    {route:"map",label:"Mapa",icon:"fa-map"},
+    {route:"history",label:"Historial",icon:"fa-clock-rotate-left"},
+    {route:"reports",label:"Reportes",icon:"fa-chart-column"},
+    {route:"settings",label:"Configuración",icon:"fa-gear"}
+  ],
+  supervisor:[
+    {route:"dashboard",label:"Dashboard",icon:"fa-gauge-high"},
+    {route:"guards",label:"Vigilantes asignados",icon:"fa-user-shield"},
+    {route:"shifts",label:"Turnos",icon:"fa-clock"},
+    {route:"lifereports",label:"Hombre Vivo",icon:"fa-heart-pulse"},
+    {route:"alerts",label:"Alertas",icon:"fa-bell"},
+    {route:"rounds",label:"Rondas",icon:"fa-route"},
+    {route:"news",label:"Novedades",icon:"fa-note-sticky"},
+    {route:"incidents",label:"Incidentes",icon:"fa-triangle-exclamation"},
+    {route:"map",label:"Mapa",icon:"fa-map"}
+  ],
+  vigilante:[
+    {route:"guardhome",label:"Mi turno",icon:"fa-house"},
+    {route:"rounds",label:"Mis rondas",icon:"fa-route"},
+    {route:"news",label:"Novedades",icon:"fa-note-sticky"},
+    {route:"incidents",label:"Incidentes",icon:"fa-triangle-exclamation"}
+  ]
+};
+let currentRoute="dashboard";
+
+function buildNav(){
+  const items = NAV_ITEMS[CURRENT_USER.role];
+  document.getElementById("nav-menu").innerHTML = items.map(it=>`
+    <a href="#${it.route}" class="nav-item" data-route="${it.route}"><i class="fa-solid ${it.icon}"></i> ${it.label}</a>
+  `).join("");
+  document.querySelectorAll(".nav-item").forEach(a=>a.onclick=()=>{ closeSidebarMobile(); });
+}
+
+function navigate(route){
+  const items = NAV_ITEMS[CURRENT_USER.role];
+  if(!items.find(i=>i.route===route)) route = items[0].route;
+  if(currentRoute==="map" && route!=="map" && GPS_WATCH_ID!==null){
+    navigator.geolocation.clearWatch(GPS_WATCH_ID); GPS_WATCH_ID=null; GPS_MARKER=null;
+  }
+  currentRoute = route;
+  document.querySelectorAll(".nav-item").forEach(a=>a.classList.toggle("active", a.dataset.route===route));
+  const meta = items.find(i=>i.route===route);
+  document.getElementById("page-title").textContent = meta?meta.label:"";
+  document.getElementById("content").innerHTML = renderRoute(route);
+  afterRouteRender(route);
+  updateBell();
+}
+
+function renderRoute(route){
+  switch(route){
+    case "dashboard": return CURRENT_USER.role==="admin"?renderAdminDashboard():renderSupervisorDashboard();
+    case "guards": return CURRENT_USER.role==="admin"?renderEntitySection("guards"):renderSupervisorGuards();
+    case "supervisors": return renderEntitySection("supervisors");
+    case "companies": return renderEntitySection("companies");
+    case "sites": return renderEntitySection("sites");
+    case "posts": return renderEntitySection("posts");
+    case "zones": return renderEntitySection("zones");
+    case "shifts": return renderShiftsSection();
+    case "lifereports": return renderLifeReportsSection();
+    case "alerts": return renderAlertsSection();
+    case "rounds": return renderRoundsSection();
+    case "news": return renderEntitySection("news","Novedades");
+    case "incidents": return renderEntitySection("incidents","Incidentes");
+    case "map": return renderMapSection();
+    case "history": return renderHistorySection();
+    case "reports": return renderReportsSection();
+    case "settings": return renderSettingsSection();
+    case "guardhome": return renderGuardHome();
+    default: return "<p>No encontrado</p>";
+  }
+}
+function afterRouteRender(route){
+  if(route==="map") initMap();
+  if(route==="dashboard" && CURRENT_USER.role==="admin") initDashboardChart();
+  if(route==="guardhome") initGuardPanel();
+  if(route==="reports") initReportsChart();
+}
+window.addEventListener("hashchange",()=>{
+  const r=location.hash.replace("#","")||currentRoute;
+  navigate(r);
+});
+
+/* =========================================================
+   10. DASHBOARD ADMIN
+   ========================================================= */
+function renderAdminDashboard(){
+  const guards=loadData("app_guards"), shifts=loadData("app_shifts").filter(s=>s.date===todayStr());
+  const reports=loadData("app_lifereports").filter(r=>r.date===todayStr());
+  const alerts=loadData("app_alerts").filter(a=>a.status==="activa");
+  const incidents=loadData("app_incidents").filter(i=>i.date===todayStr());
+  const news=loadData("app_news").filter(n=>n.date===todayStr());
+  const activeShifts=shifts.filter(s=>s.status==="en_curso");
+  const okReports=reports.filter(r=>r.status==="reportado").length;
+  const pendReports=reports.filter(r=>r.status==="pendiente").length;
+  const dueReports=reports.filter(r=>r.status==="vencido").length;
+
+  const stats=[
+    {label:"Vigilantes totales",value:guards.length,icon:"fa-user-shield",cls:"ic-green"},
+    {label:"Vigilantes activos",value:guards.filter(g=>g.status==="activo").length,icon:"fa-user-check",cls:"ic-green"},
+    {label:"En turno ahora",value:activeShifts.length,icon:"fa-person-walking-arrow-right",cls:"ic-green"},
+    {label:"Turnos hoy",value:shifts.length,icon:"fa-clock",cls:"ic-gray"},
+    {label:"Hombre Vivo OK",value:okReports,icon:"fa-heart-pulse",cls:"ic-green"},
+    {label:"Reportes pendientes",value:pendReports,icon:"fa-hourglass-half",cls:"ic-yellow"},
+    {label:"Reportes vencidos",value:dueReports,icon:"fa-triangle-exclamation",cls:"ic-red"},
+    {label:"Alertas activas",value:alerts.length,icon:"fa-bell",cls:"ic-red"},
+    {label:"Incidentes hoy",value:incidents.length,icon:"fa-shield-halved",cls:"ic-yellow"},
+    {label:"Novedades hoy",value:news.length,icon:"fa-note-sticky",cls:"ic-gray"}
+  ];
+
+  const guardRows = guards.filter(g=>g.status==="activo").map(g=>{
+    const shift = shifts.find(s=>s.guardId===g.id);
+    const guardReports = reports.filter(r=>r.guardId===g.id).sort((a,b)=>a.scheduledAt-b.scheduledAt);
+    const last = [...guardReports].reverse().find(r=>r.status!=="pendiente");
+    const next = guardReports.find(r=>r.status==="pendiente");
+    const zone = shift?loadData("app_zones").find(z=>z.id===shift.zoneId):null;
+    let stateDot="⚫", stateLabel="Fuera de turno", badgeCls="b-gray";
+    if(shift){
+      if(next && next.status==="pendiente" && next.scheduledAt-Date.now() < 5*60000){ stateDot="🟡"; stateLabel="Próximo reporte"; badgeCls="b-yellow"; }
+      else { stateDot="🟢"; stateLabel="En turno"; badgeCls="b-green"; }
+      if(reports.find(r=>r.guardId===g.id && r.status==="vencido")){ stateDot="🔴"; stateLabel="Reporte vencido"; badgeCls="b-red"; }
+    }
+    return `<tr>
+      <td>${escapeHTML(g.firstName+" "+g.lastName)}</td>
+      <td>${zone?escapeHTML(zone.name):"—"}</td>
+      <td>${shift?escapeHTML(shift.startTime+" - "+shift.endTime):"—"}</td>
+      <td>${last?escapeHTML(last.actualTime||"—"):"—"}</td>
+      <td>${next?escapeHTML(next.scheduledTime):"—"}</td>
+      <td><span class="badge ${badgeCls}">${stateDot} ${stateLabel}</span></td>
+    </tr>`;
+  }).join("");
+
+  return `
+  <div class="grid stat-grid">
+    ${stats.map(s=>`<div class="stat-card"><div class="top"><div class="icon ${s.cls}"><i class="fa-solid ${s.icon}"></i></div></div><div class="value">${s.value}</div><div class="label">${s.label}</div></div>`).join("")}
+  </div>
+  <div class="grid two-col">
+    <div class="panel">
+      <div class="panel-head"><h3><i class="fa-solid fa-chart-line"></i> Cumplimiento Hombre Vivo (hoy)</h3></div>
+      <div class="panel-body"><canvas id="dashChart" height="160"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3><i class="fa-solid fa-bell"></i> Alertas activas</h3></div>
+      <div class="panel-body">
+        ${alerts.length? alerts.slice(0,6).map(a=>`
+          <div style="padding:9px 0;border-bottom:1px solid var(--gray-100)">
+            <div style="font-weight:700;font-size:13px">🚨 ${escapeHTML(a.title)}</div>
+            <div class="mini-note">${escapeHTML(refLabelOf("guards",a.guardId))} · ${escapeHTML(a.scheduledTime)} · ${escapeHTML(refLabelOf("zones",a.zoneId))}</div>
+          </div>`).join("") : `<div class="empty-state"><i class="fa-solid fa-check"></i><div>Sin alertas activas</div></div>`}
+      </div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h3><i class="fa-solid fa-user-shield"></i> Vigilantes activos</h3></div>
+    <div class="panel-body table-wrap">
+      <table><thead><tr><th>Vigilante</th><th>Zona</th><th>Turno</th><th>Último reporte</th><th>Próximo reporte</th><th>Estado</th></tr></thead>
+      <tbody>${guardRows || `<tr><td colspan="6"><div class="empty-state"><i class="fa-solid fa-inbox"></i><div>Sin vigilantes activos</div></div></td></tr>`}</tbody></table>
+    </div>
+  </div>`;
+}
+function initDashboardChart(){
+  const ctx=document.getElementById("dashChart"); if(!ctx) return;
+  const reports=loadData("app_lifereports").filter(r=>r.date===todayStr());
+  const data=[reports.filter(r=>r.status==="reportado").length, reports.filter(r=>r.status==="tarde").length,
+    reports.filter(r=>r.status==="vencido").length, reports.filter(r=>r.status==="pendiente").length];
+  if(window._dashChart) window._dashChart.destroy();
+  window._dashChart = new Chart(ctx,{type:"doughnut",data:{labels:["A tiempo","Con retraso","Vencidos","Pendientes"],
+    datasets:[{data,backgroundColor:["#22c55e","#e5a93d","#e5484d","#c9d1cc"]}]},
+    options:{plugins:{legend:{position:"bottom",labels:{boxWidth:10,font:{size:11}}}}}});
+}
+
+/* ---------- Dashboard Supervisor ---------- */
+function renderSupervisorDashboard(){
+  const sup = loadData("app_supervisors").find(s=>s.id===CURRENT_USER.linkedId);
+  const shifts=loadData("app_shifts").filter(s=>s.date===todayStr() && (!sup || s.supervisorId===sup.id));
+  const guardIds=[...new Set(shifts.map(s=>s.guardId))];
+  const reports=loadData("app_lifereports").filter(r=>r.date===todayStr() && guardIds.includes(r.guardId));
+  const alerts=loadData("app_alerts").filter(a=>a.status==="activa" && (!sup || a.supervisorId===sup.id));
+  const incidents=loadData("app_incidents").filter(i=>i.date===todayStr() && guardIds.includes(i.guardId));
+
+  const stats=[
+    {label:"Vigilantes asignados",value:guardIds.length,icon:"fa-user-shield",cls:"ic-green"},
+    {label:"Turnos hoy",value:shifts.length,icon:"fa-clock",cls:"ic-gray"},
+    {label:"Reportes vencidos",value:reports.filter(r=>r.status==="vencido").length,icon:"fa-triangle-exclamation",cls:"ic-red"},
+    {label:"Alertas activas",value:alerts.length,icon:"fa-bell",cls:"ic-red"},
+    {label:"Incidentes hoy",value:incidents.length,icon:"fa-shield-halved",cls:"ic-yellow"}
+  ];
+  return `
+  <div class="grid stat-grid">${stats.map(s=>`<div class="stat-card"><div class="top"><div class="icon ${s.cls}"><i class="fa-solid ${s.icon}"></i></div></div><div class="value">${s.value}</div><div class="label">${s.label}</div></div>`).join("")}</div>
+  ${renderShiftsTableGeneric(shifts)}
+  `;
+}
+function renderSupervisorGuards(){
+  const sup = loadData("app_supervisors").find(s=>s.id===CURRENT_USER.linkedId);
+  const shifts=loadData("app_shifts").filter(s=>!sup||s.supervisorId===sup.id);
+  const guardIds=[...new Set(shifts.map(s=>s.guardId))];
+  const guards=loadData("app_guards").filter(g=>guardIds.includes(g.id));
+  const rows = guards.map(g=>`<tr><td>${escapeHTML(g.firstName+" "+g.lastName)}</td><td>${escapeHTML(g.document)}</td><td>${escapeHTML(g.phone)}</td><td>${statusBadge(g.status)}</td></tr>`).join("");
+  return `<div class="panel"><div class="panel-head"><h3><i class="fa-solid fa-user-shield"></i> Vigilantes asignados</h3></div>
+    <div class="panel-body table-wrap"><table><thead><tr><th>Nombre</th><th>Documento</th><th>Teléfono</th><th>Estado</th></tr></thead>
+    <tbody>${rows||`<tr><td colspan="4"><div class="empty-state"><i class="fa-solid fa-inbox"></i><div>Sin vigilantes asignados</div></div></td></tr>`}</tbody></table></div></div>`;
+}
+
+/* =========================================================
+   11. TURNOS
+   ========================================================= */
+function renderShiftsTableGeneric(shifts){
+  const rows = shifts.map(s=>`
+    <tr>
+      <td>${escapeHTML(refLabelOf("guards",s.guardId))}</td>
+      <td>${escapeHTML(refLabelOf("posts",s.postId))}</td>
+      <td>${escapeHTML(s.date)}</td>
+      <td>${escapeHTML(s.startTime)} - ${escapeHTML(s.endTime)}</td>
+      <td>${escapeHTML(s.interval)} min</td>
+      <td>${statusBadge(s.status)}</td>
+    </tr>`).join("");
+  return `<div class="panel"><div class="panel-head"><h3><i class="fa-solid fa-clock"></i> Turnos de hoy</h3></div>
+    <div class="panel-body table-wrap"><table><thead><tr><th>Vigilante</th><th>Puesto</th><th>Fecha</th><th>Horario</th><th>Intervalo</th><th>Estado</th></tr></thead>
+    <tbody>${rows||`<tr><td colspan="6"><div class="empty-state"><i class="fa-solid fa-inbox"></i><div>Sin turnos</div></div></td></tr>`}</tbody></table></div></div>`;
+}
+function renderShiftsSection(){
+  if(CURRENT_USER.role==="admin") return renderEntitySection("shifts");
+  const sup=loadData("app_supervisors").find(s=>s.id===CURRENT_USER.linkedId);
+  const shifts=loadData("app_shifts").filter(s=>!sup||s.supervisorId===sup.id);
+  return renderShiftsTableGeneric(shifts);
+}
+
+/* =========================================================
+   12. HOMBRE VIVO — sección admin/supervisor
+   ========================================================= */
+function renderLifeReportsSection(){
+  let reports=loadData("app_lifereports").filter(r=>r.date===todayStr());
+  if(CURRENT_USER.role==="supervisor"){
+    const sup=loadData("app_supervisors").find(s=>s.id===CURRENT_USER.linkedId);
+    const shifts=loadData("app_shifts").filter(s=>!sup||s.supervisorId===sup.id);
+    const guardIds=shifts.map(s=>s.guardId);
+    reports=reports.filter(r=>guardIds.includes(r.guardId));
+  }
+  reports.sort((a,b)=>a.scheduledAt-b.scheduledAt);
+  const rows = reports.map(r=>`
+    <tr>
+      <td>${escapeHTML(refLabelOf("guards",r.guardId))}</td>
+      <td>${escapeHTML(refLabelOf("zones",r.zoneId))}</td>
+      <td>${escapeHTML(r.scheduledTime)}</td>
+      <td>${escapeHTML(r.actualTime||"—")}</td>
+      <td>${r.diffMinutes!=null?r.diffMinutes+" min":"—"}</td>
+      <td>${statusBadge(r.status)}</td>
+    </tr>`).join("");
+  return `<div class="panel"><div class="panel-head"><h3><i class="fa-solid fa-heart-pulse"></i> Reportes Hombre Vivo — hoy</h3>
+      <button class="btn btn-outline btn-sm" onclick="generateLifeReportsForToday();checkLifeReportsAndAlerts();navigate('lifereports');toast('ok','Reportes actualizados')"><i class="fa-solid fa-rotate"></i> Actualizar</button></div>
+    <div class="panel-body table-wrap"><table><thead><tr><th>Vigilante</th><th>Zona</th><th>Programado</th><th>Real</th><th>Diferencia</th><th>Estado</th></tr></thead>
+    <tbody>${rows||`<tr><td colspan="6"><div class="empty-state"><i class="fa-solid fa-inbox"></i><div>No hay reportes generados para hoy</div></div></td></tr>`}</tbody></table></div></div>`;
+}
+
+/* =========================================================
+   13. ALERTAS
+   ========================================================= */
+function renderAlertsSection(){
+  let alerts=loadData("app_alerts").sort((a,b)=>b.createdAt-a.createdAt);
+  if(CURRENT_USER.role==="supervisor"){
+    const sup=loadData("app_supervisors").find(s=>s.id===CURRENT_USER.linkedId);
+    alerts=alerts.filter(a=>!sup||a.supervisorId===sup.id);
+  }
+  const levelBadge={critica:"b-red",advertencia:"b-yellow",informacion:"b-blue"};
+  const rows = alerts.map(a=>`
+    <tr>
+      <td><span class="badge ${levelBadge[a.level]||'b-gray'}">${escapeHTML(a.level)}</span></td>
+      <td>${escapeHTML(a.title)}</td>
+      <td>${escapeHTML(refLabelOf("guards",a.guardId))}</td>
+      <td>${escapeHTML(refLabelOf("zones",a.zoneId))}</td>
+      <td>${escapeHTML(a.scheduledTime)}</td>
+      <td>${statusBadge(a.status)}</td>
+      <td>${a.status==="activa"?`<button class="btn btn-outline btn-sm" onclick="resolveAlert('${a.id}')">Resolver</button>`:"—"}</td>
+    </tr>`).join("");
+  return `<div class="panel"><div class="panel-head"><h3><i class="fa-solid fa-bell"></i> Centro de alertas</h3></div>
+    <div class="panel-body table-wrap"><table><thead><tr><th>Nivel</th><th>Título</th><th>Vigilante</th><th>Zona</th><th>Hora</th><th>Estado</th><th></th></tr></thead>
+    <tbody>${rows||`<tr><td colspan="7"><div class="empty-state"><i class="fa-solid fa-bell-slash"></i><div>No hay alertas registradas</div></div></td></tr>`}</tbody></table></div></div>`;
+}
+function resolveAlert(id){
+  const alerts=loadData("app_alerts");
+  const a=alerts.find(x=>x.id===id); if(a) a.status="resuelta";
+  saveData("app_alerts",alerts);
+  toast("ok","Alerta marcada como resuelta");
+  navigate("alerts");
+}
+function updateBell(){
+  const count = loadData("app_alerts").filter(a=>a.status==="activa").length;
+  const el=document.getElementById("bell-count");
+  if(count>0){ el.textContent=count>99?"99+":count; el.classList.remove("hidden"); } else el.classList.add("hidden");
+}
+document.getElementById("bell-btn").onclick=()=>navigate("alerts");
+
+/* =========================================================
+   14. RONDAS
+   ========================================================= */
+function renderRoundsSection(){
+  const rounds=loadData("app_rounds");
+  const checks=loadData("app_roundchecks");
+  const isGuard = CURRENT_USER.role==="vigilante";
+  const guardShift = isGuard ? loadData("app_shifts").find(s=>s.guardId===CURRENT_USER.linkedId && s.date===todayStr() && s.status==="en_curso") : null;
+  const site = guardShift ? loadData("app_posts").find(p=>p.id===guardShift.postId)?.siteId : null;
+
+  const cards = rounds.filter(r=>!isGuard || r.siteId===site).map(round=>{
+    const todayChecks = checks.filter(c=>c.roundId===round.id && c.date===todayStr() && (!isGuard || c.guardId===CURRENT_USER.linkedId));
+    const pointsHTML = round.points.map((pt,idx)=>{
+      const done = todayChecks.find(c=>c.pointIndex===idx);
+      const st = done ? done.status : "pendiente";
+      const icon = st==="completado"?"fa-circle-check":st==="omitido"?"fa-circle-xmark":st==="fuera_zona"?"fa-location-crosshairs":"fa-circle";
+      const color = st==="completado"?"var(--ok)":st==="omitido"?"var(--danger)":st==="fuera_zona"?"var(--warn)":"var(--gray-500)";
+      return `<div class="flex-between" style="padding:8px 0;border-bottom:1px solid var(--gray-100)">
+        <div><i class="fa-solid ${icon}" style="color:${color};margin-right:8px"></i>${escapeHTML(pt.name)} <span class="mini-note">(${escapeHTML(pt.code)})</span></div>
+        ${isGuard && !done ? `<button class="btn btn-outline btn-sm" onclick="scanRoundPoint('${round.id}',${idx})"><i class="fa-solid fa-qrcode"></i> Escanear</button>` : done?`<span class="mini-note">${escapeHTML(done.time)}</span>`:""}
+      </div>`;
+    }).join("");
+    const pct = Math.round((todayChecks.filter(c=>c.status==="completado").length/round.points.length)*100);
+    return `<div class="panel"><div class="panel-head"><h3><i class="fa-solid fa-route"></i> ${escapeHTML(round.name)}</h3><span class="tag-pill">${pct}% completado</span></div>
+      <div class="panel-body"><div class="progress-bar" style="margin-bottom:12px"><div style="width:${pct}%"></div></div>${pointsHTML}</div></div>`;
+  }).join("");
+  return cards || `<div class="panel"><div class="panel-body"><div class="empty-state"><i class="fa-solid fa-route"></i><div>No hay rondas configuradas para tu sede/turno actual</div></div></div></div>`;
+}
+function scanRoundPoint(roundId,pointIdx){
+  const round=loadData("app_rounds").find(r=>r.id===roundId);
+  const pt=round.points[pointIdx];
+  openModal("Registrar punto de ronda", `
+    <p style="font-size:14px;margin-bottom:10px">Vas a registrar el punto <b>${escapeHTML(pt.name)}</b> (${escapeHTML(pt.code)}).</p>
+    <p class="mini-note">En esta versión de demostración el escaneo QR/NFC se simula con este botón de confirmación. La app intentará capturar tu ubicación GPS.</p>
+  `, `<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="doScanRoundPoint('${roundId}',${pointIdx})"><i class="fa-solid fa-qrcode"></i> Confirmar escaneo</button>`);
+}
+function doScanRoundPoint(roundId,pointIdx){
+  const finish=(lat,lng)=>{
+    const checks=loadData("app_roundchecks");
+    checks.push({id:generateId("rc"),roundId,guardId:CURRENT_USER.linkedId,pointIndex:pointIdx,
+      date:todayStr(),time:nowTimeStr(),lat,lng,status:"completado"});
+    saveData("app_roundchecks",checks);
+    const h=loadData("app_history"); h.push({id:generateId("h"),type:"ronda",description:"Punto de ronda registrado",date:todayStr(),time:nowTimeStr()}); saveData("app_history",h);
+    closeModal(); toast("ok","Punto registrado correctamente"); navigate("rounds");
+  };
+  // GPS del navegador: puede estar limitado por permisos/HTTPS/dispositivo (ver comentario en confirmarPresencia)
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(pos=>finish(pos.coords.latitude,pos.coords.longitude), ()=>finish(null,null), {timeout:4000});
+  } else finish(null,null);
+}
+
+/* =========================================================
+   15. MAPA (Leaflet)
+   ========================================================= */
+let LEAFLET_MAP=null;
+function initMap(){
+  const el=document.getElementById("map"); if(!el) return;
+  if(LEAFLET_MAP){ LEAFLET_MAP.remove(); LEAFLET_MAP=null; }
+  try{
+    LEAFLET_MAP = L.map("map").setView([4.65,-74.08],11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(LEAFLET_MAP);
+
+    const sites=loadData("app_sites"), zones=loadData("app_zones"), posts=loadData("app_posts");
+    sites.forEach(s=>{ if(s.lat&&s.lng) L.marker([s.lat,s.lng]).addTo(LEAFLET_MAP).bindPopup(`<b>${escapeHTML(s.name)}</b><br>Sede`); });
+    zones.forEach(z=>{ if(z.lat&&z.lng) L.circle([z.lat,z.lng],{radius:z.radius||80,color:"#0e6b3a",fillOpacity:.08}).addTo(LEAFLET_MAP).bindPopup(`<b>${escapeHTML(z.name)}</b><br>Zona`); });
+
+    const shifts=loadData("app_shifts").filter(s=>s.date===todayStr());
+    const reports=loadData("app_lifereports").filter(r=>r.date===todayStr());
+    shifts.forEach(s=>{
+      const post=posts.find(p=>p.id===s.postId); if(!post||!post.lat) return;
+      const guardReports=reports.filter(r=>r.guardId===s.guardId);
+      let color="#6b7a72", label="Fuera de turno";
+      if(s.status==="en_curso"){
+        if(guardReports.find(r=>r.status==="vencido")){ color="#e5484d"; label="Sin reporte / vencido"; }
+        else { const next=guardReports.find(r=>r.status==="pendiente");
+          if(next && next.scheduledAt-Date.now()<5*60000){ color="#e5a93d"; label="Próximo a reportar"; }
+          else { color="#22c55e"; label="Reportando correctamente"; }
+        }
+      }
+      const guard=loadData("app_guards").find(g=>g.id===s.guardId);
+      const marker=L.circleMarker([post.lat,post.lng],{radius:9,color,fillColor:color,fillOpacity:.9,weight:2}).addTo(LEAFLET_MAP);
+      marker.bindPopup(`<b>${escapeHTML(guard?guard.firstName+" "+guard.lastName:"")}</b><br>${escapeHTML(label)}<br>Puesto: ${escapeHTML(post.name)}<br>Turno: ${escapeHTML(s.startTime)}-${escapeHTML(s.endTime)}`);
+    });
+  }catch(e){ console.error("Leaflet error",e); el.innerHTML='<div class="empty-state"><i class="fa-solid fa-map"></i><div>No se pudo cargar el mapa (sin conexión a internet). Los datos de zonas y puestos siguen disponibles en sus respectivos módulos.</div></div>'; }
+}
+function renderMapSection(){
+  return `<div class="panel"><div class="panel-head">
+      <h3><i class="fa-solid fa-map"></i> Mapa de operación</h3>
+      <button class="btn btn-outline btn-sm" id="gps-toggle-btn" onclick="toggleGPSLocation()"><i class="fa-solid fa-location-crosshairs"></i> Activar mi ubicación (GPS)</button>
+    </div>
+    <div class="panel-body"><div id="map"></div>
+    <div class="map-legend">
+      <span><span class="dot-status" style="background:#22c55e"></span> Reportando correctamente</span>
+      <span><span class="dot-status" style="background:#e5a93d"></span> Próximo a reportar</span>
+      <span><span class="dot-status" style="background:#e5484d"></span> Sin reporte</span>
+      <span><span class="dot-status" style="background:#6b7a72"></span> Fuera de turno</span>
+      <span><span class="dot-status" style="background:#1266f1"></span> Tu ubicación (GPS)</span>
+    </div>
+    <div class="mini-note" style="margin-top:6px">Al activar el GPS, el mapa se centra y sigue tu ubicación en tiempo real. Al desactivarlo, vuelve a mostrar la vista general de tus sedes registradas.</div>
+    </div></div>`;
+}
+
+/* ---------- GPS: seguir mi ubicación en el mapa ---------- */
+let GPS_WATCH_ID = null;
+let GPS_MARKER = null;
+function centerMapDefault(){
+  if(!LEAFLET_MAP) return;
+  const sites=loadData("app_sites").filter(s=>s.lat&&s.lng);
+  if(sites.length){
+    const avgLat = sites.reduce((a,s)=>a+s.lat,0)/sites.length;
+    const avgLng = sites.reduce((a,s)=>a+s.lng,0)/sites.length;
+    LEAFLET_MAP.setView([avgLat,avgLng], sites.length===1?14:11);
+  } else {
+    LEAFLET_MAP.setView([4.65,-74.08], 11); // vista genérica por defecto, sin sedes aún registradas
+  }
+}
+function updateGPSButtonUI(active,note){
+  const btn=document.getElementById("gps-toggle-btn"); if(!btn) return;
+  if(active){
+    btn.classList.remove("btn-outline"); btn.classList.add("btn-primary");
+    btn.innerHTML = `<i class="fa-solid fa-location-crosshairs"></i> ${note||"GPS activo — siguiendo tu ubicación"}`;
+  } else {
+    btn.classList.add("btn-outline"); btn.classList.remove("btn-primary");
+    btn.innerHTML = `<i class="fa-solid fa-location-crosshairs"></i> Activar mi ubicación (GPS)`;
+  }
+}
+function toggleGPSLocation(){
+  if(GPS_WATCH_ID!==null){
+    navigator.geolocation.clearWatch(GPS_WATCH_ID);
+    GPS_WATCH_ID=null;
+    if(GPS_MARKER && LEAFLET_MAP){ LEAFLET_MAP.removeLayer(GPS_MARKER); GPS_MARKER=null; }
+    updateGPSButtonUI(false);
+    centerMapDefault();
+    toast("ok","Ubicación GPS desactivada");
+    return;
+  }
+  if(!navigator.geolocation){ toast("err","Este navegador no soporta geolocalización"); return; }
+  updateGPSButtonUI(true,"Buscando señal GPS...");
+  // BACKEND/NAVEGADOR: la precisión y disponibilidad del GPS del navegador dependen de
+  // los permisos concedidos por el usuario, de que el sitio se sirva por HTTPS y del
+  // hardware del dispositivo; en interiores o sin señal puede no responder.
+  GPS_WATCH_ID = navigator.geolocation.watchPosition(
+    pos=>{
+      const {latitude:lat, longitude:lng} = pos.coords;
+      if(!LEAFLET_MAP) return;
+      LEAFLET_MAP.setView([lat,lng], Math.max(LEAFLET_MAP.getZoom(),15));
+      if(GPS_MARKER){ GPS_MARKER.setLatLng([lat,lng]); }
+      else {
+        GPS_MARKER = L.circleMarker([lat,lng],{radius:9,color:"#1266f1",fillColor:"#1266f1",fillOpacity:.9,weight:2})
+          .addTo(LEAFLET_MAP).bindPopup("Tu ubicación actual");
+      }
+      updateGPSButtonUI(true);
+    },
+    err=>{
+      toast("err","No se pudo obtener tu ubicación GPS: "+err.message);
+      updateGPSButtonUI(false);
+      if(GPS_WATCH_ID!==null){ navigator.geolocation.clearWatch(GPS_WATCH_ID); GPS_WATCH_ID=null; }
+    },
+    {enableHighAccuracy:true, maximumAge:5000, timeout:10000}
+  );
+}
+
+/* =========================================================
+   16. HISTORIAL
+   ========================================================= */
+function renderHistorySection(){
+  const h=loadData("app_history").slice().reverse();
+  const rows = h.map(e=>`<tr><td>${escapeHTML(e.date)}</td><td>${escapeHTML(e.time)}</td><td><span class="tag-pill">${escapeHTML((e.type||"").replace(/_/g," "))}</span></td><td>${escapeHTML(e.description)}</td></tr>`).join("");
+  return `<div class="panel"><div class="panel-head"><h3><i class="fa-solid fa-clock-rotate-left"></i> Historial general</h3></div>
+    <div class="panel-body">
+      <div class="toolbar"><div class="search-box"><i class="fa-solid fa-magnifying-glass"></i><input placeholder="Buscar en historial..." oninput="filterTable(this,'history-table')"></div></div>
+      <div class="table-wrap"><table id="history-table"><thead><tr><th>Fecha</th><th>Hora</th><th>Evento</th><th>Descripción</th></tr></thead>
+      <tbody>${rows||`<tr><td colspan="4"><div class="empty-state"><i class="fa-solid fa-inbox"></i><div>Sin eventos registrados</div></div></td></tr>`}</tbody></table></div>
+    </div></div>`;
+}
+
+/* =========================================================
+   17. REPORTES / EXPORT CSV
+   ========================================================= */
+function renderReportsSection(){
+  const guards=loadData("app_guards"), sites=loadData("app_sites"), zones=loadData("app_zones");
+  return `<div class="panel"><div class="panel-head"><h3><i class="fa-solid fa-chart-column"></i> Filtros de reportes</h3></div>
+    <div class="panel-body">
+      <div class="form-grid">
+        <div class="fg"><label>Fecha inicial</label><input type="date" id="rep-from" value="${todayStr()}"></div>
+        <div class="fg"><label>Fecha final</label><input type="date" id="rep-to" value="${todayStr()}"></div>
+        <div class="fg"><label>Vigilante</label><select id="rep-guard"><option value="">Todos</option>${guards.map(g=>`<option value="${g.id}">${escapeHTML(g.firstName+" "+g.lastName)}</option>`).join("")}</select></div>
+        <div class="fg"><label>Zona</label><select id="rep-zone"><option value="">Todas</option>${zones.map(z=>`<option value="${z.id}">${escapeHTML(z.name)}</option>`).join("")}</select></div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="runReport()"><i class="fa-solid fa-filter"></i> Generar</button>
+        <button class="btn btn-outline btn-sm" onclick="exportReportCSV()"><i class="fa-solid fa-file-csv"></i> Exportar CSV</button>
+      </div>
+    </div></div>
+  <div class="grid two-col">
+    <div class="panel"><div class="panel-head"><h3>Cumplimiento Hombre Vivo</h3></div><div class="panel-body"><canvas id="repChart" height="180"></canvas></div></div>
+    <div class="panel"><div class="panel-head"><h3>Resumen</h3></div><div class="panel-body" id="rep-summary"><div class="mini-note">Genera un reporte para ver el resumen.</div></div></div>
+  </div>
+  <div class="panel"><div class="panel-head"><h3>Detalle</h3></div><div class="panel-body table-wrap" id="rep-table"><div class="empty-state"><i class="fa-solid fa-chart-column"></i><div>Sin datos generados aún</div></div></div></div>`;
+}
+function filteredReports(){
+  const from=document.getElementById("rep-from")?.value, to=document.getElementById("rep-to")?.value;
+  const guard=document.getElementById("rep-guard")?.value, zone=document.getElementById("rep-zone")?.value;
+  return loadData("app_lifereports").filter(r=>{
+    if(from && r.date<from) return false;
+    if(to && r.date>to) return false;
+    if(guard && r.guardId!==guard) return false;
+    if(zone && r.zoneId!==zone) return false;
+    return true;
+  });
+}
+function runReport(){
+  const data=filteredReports();
+  const ok=data.filter(r=>r.status==="reportado").length, late=data.filter(r=>r.status==="tarde").length;
+  const due=data.filter(r=>r.status==="vencido").length, pend=data.filter(r=>r.status==="pendiente").length;
+  document.getElementById("rep-summary").innerHTML=`
+    <div class="flex-between" style="padding:6px 0"><span>Total reportes</span><b>${data.length}</b></div>
+    <div class="flex-between" style="padding:6px 0"><span>A tiempo</span><b style="color:var(--ok)">${ok}</b></div>
+    <div class="flex-between" style="padding:6px 0"><span>Con retraso</span><b style="color:var(--warn)">${late}</b></div>
+    <div class="flex-between" style="padding:6px 0"><span>Vencidos</span><b style="color:var(--danger)">${due}</b></div>
+    <div class="flex-between" style="padding:6px 0"><span>Pendientes</span><b>${pend}</b></div>`;
+  const ctx=document.getElementById("repChart");
+  if(window._repChart) window._repChart.destroy();
+  window._repChart=new Chart(ctx,{type:"bar",data:{labels:["A tiempo","Con retraso","Vencidos","Pendientes"],
+    datasets:[{data:[ok,late,due,pend],backgroundColor:["#22c55e","#e5a93d","#e5484d","#c9d1cc"]}]},
+    options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+  document.getElementById("rep-table").innerHTML = `<table><thead><tr><th>Vigilante</th><th>Zona</th><th>Fecha</th><th>Programado</th><th>Real</th><th>Estado</th></tr></thead>
+    <tbody>${data.map(r=>`<tr><td>${escapeHTML(refLabelOf("guards",r.guardId))}</td><td>${escapeHTML(refLabelOf("zones",r.zoneId))}</td><td>${escapeHTML(r.date)}</td><td>${escapeHTML(r.scheduledTime)}</td><td>${escapeHTML(r.actualTime||"—")}</td>${`<td>${statusBadge(r.status)}</td>`}</tr>`).join("")||`<tr><td colspan="6"><div class="empty-state"><i class="fa-solid fa-inbox"></i><div>Sin resultados</div></div></td></tr>`}</tbody></table>`;
+}
+function initReportsChart(){ runReport(); }
+function exportReportCSV(){
+  const data=filteredReports();
+  if(!data.length){ toast("warn","No hay datos para exportar"); return; }
+  const headers=["Vigilante","Zona","Fecha","Programado","Real","Diferencia(min)","Estado"];
+  const rows=data.map(r=>[refLabelOf("guards",r.guardId),refLabelOf("zones",r.zoneId),r.date,r.scheduledTime,r.actualTime||"",r.diffMinutes??"",r.status]);
+  const csv=[headers,...rows].map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a"); a.href=url; a.download=`reporte_vigilpro_${todayStr()}.csv`; a.click();
+  URL.revokeObjectURL(url);
+  toast("ok","CSV exportado");
+}
+
+/* =========================================================
+   18. CONFIGURACIÓN
+   ========================================================= */
+function renderSettingsSection(){
+  const s=loadData("app_settings");
+  return `<div class="panel"><div class="panel-head"><h3><i class="fa-solid fa-gear"></i> Configuración general Hombre Vivo</h3></div>
+    <div class="panel-body">
+      <div class="form-grid">
+        <div class="fg"><label>Intervalo por defecto (min)</label><input type="number" id="cfg-interval" value="${s.homeLifeDefaultInterval}"></div>
+        <div class="fg"><label>Tolerancia por defecto (min)</label><input type="number" id="cfg-tolerance" value="${s.homeLifeDefaultTolerance}"></div>
+        <div class="fg"><label>GPS obligatorio</label><select id="cfg-gps"><option value="true" ${s.gpsRequired?"selected":""}>Sí</option><option value="false" ${!s.gpsRequired?"selected":""}>No</option></select></div>
+        <div class="fg"><label>Foto obligatoria</label><select id="cfg-photo"><option value="true" ${s.photoRequired?"selected":""}>Sí</option><option value="false" ${!s.photoRequired?"selected":""}>No</option></select></div>
+        <div class="fg"><label>Zona obligatoria</label><select id="cfg-zone"><option value="true" ${s.zoneRequired?"selected":""}>Sí</option><option value="false" ${!s.zoneRequired?"selected":""}>No</option></select></div>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:10px">
+        <button class="btn btn-primary btn-sm" onclick="saveSettings()"><i class="fa-solid fa-check"></i> Guardar configuración</button>
+        <button class="btn btn-danger btn-sm" onclick="confirmDialog('Esto borrará TODOS los datos operativos (empresas, sedes, vigilantes, turnos, reportes, alertas, rondas, novedades, incidentes e historial) de forma permanente. Solo se conservarán las cuentas de acceso. ¿Continuar?', resetDatabase)"><i class="fa-solid fa-trash"></i> Borrar todos los datos</button>
+      </div>
+    </div></div>`;
+}
+function saveSettings(){
+  const s={homeLifeDefaultInterval:parseInt(document.getElementById("cfg-interval").value)||30,
+    homeLifeDefaultTolerance:parseInt(document.getElementById("cfg-tolerance").value)||5,
+    gpsRequired:document.getElementById("cfg-gps").value==="true",
+    photoRequired:document.getElementById("cfg-photo").value==="true",
+    zoneRequired:document.getElementById("cfg-zone").value==="true",
+    refreshSeconds:15};
+  saveData("app_settings",s); toast("ok","Configuración guardada");
+}
+
+/* =========================================================
+   19. PANEL DEL VIGILANTE (mobile-first)
+   ========================================================= */
+let COUNTDOWN_TIMER=null;
+function renderGuardHome(){
+  const shift = loadData("app_shifts").find(s=>s.guardId===CURRENT_USER.linkedId && s.date===todayStr() && s.status==="en_curso");
+  if(!shift){
+    return `<div class="guard-wrap"><div class="no-shift"><i class="fa-solid fa-moon"></i><div>No tienes un turno activo en este momento.</div></div></div>`;
+  }
+  const post=loadData("app_posts").find(p=>p.id===shift.postId);
+  const zone=loadData("app_zones").find(z=>z.id===shift.zoneId);
+  const guard=loadData("app_guards").find(g=>g.id===CURRENT_USER.linkedId);
+  return `<div class="guard-wrap">
+    <div class="guard-hero">
+      <div class="hello">Hola, ${escapeHTML(guard?.firstName||"")}</div>
+      <div class="shiftname">TURNO ACTIVO</div>
+      <div class="guard-info-row">
+        <div><div class="lbl">Puesto</div><div class="val">${escapeHTML(post?.name||"—")}</div></div>
+        <div><div class="lbl">Zona</div><div class="val">${escapeHTML(zone?.name||"—")}</div></div>
+        <div><div class="lbl">Horario</div><div class="val">${escapeHTML(shift.startTime)} - ${escapeHTML(shift.endTime)}</div></div>
+      </div>
+    </div>
+    <div class="countdown-card" id="countdown-card">
+      <div class="cd-label">Próximo Hombre Vivo</div>
+      <div class="cd-time" id="cd-time">--:--:--</div>
+      <button class="confirm-btn" id="confirm-btn"><i class="fa-solid fa-hand"></i> CONFIRMAR PRESENCIA</button>
+      <div class="mini-note" id="cd-sub" style="margin-top:10px"></div>
+    </div>
+    <div class="quick-grid">
+      <a class="quick-btn" href="#rounds"><i class="fa-solid fa-route"></i> Mis rondas</a>
+      <button class="quick-btn" onclick="openEntityForm('news')"><i class="fa-solid fa-note-sticky"></i> Reportar novedad</button>
+      <button class="quick-btn" onclick="openEntityForm('incidents')"><i class="fa-solid fa-triangle-exclamation"></i> Reportar incidente</button>
+      <button class="quick-btn" onclick="showMyShiftInfo()"><i class="fa-solid fa-id-badge"></i> Ver mi turno</button>
+    </div>
+  </div>`;
+}
+function showMyShiftInfo(){
+  const shift = loadData("app_shifts").find(s=>s.guardId===CURRENT_USER.linkedId && s.date===todayStr() && s.status==="en_curso");
+  if(!shift){ toast("warn","No tienes un turno activo"); return; }
+  const post=loadData("app_posts").find(p=>p.id===shift.postId);
+  const zone=loadData("app_zones").find(z=>z.id===shift.zoneId);
+  const sup=loadData("app_supervisors").find(s=>s.id===shift.supervisorId);
+  openModal("Mi turno", `
+    <div class="fg"><label>Puesto</label><div>${escapeHTML(post?.name||"—")}</div></div>
+    <div class="divider"></div><div class="fg"><label>Zona</label><div>${escapeHTML(zone?.name||"—")}</div></div>
+    <div class="divider"></div><div class="fg"><label>Horario</label><div>${escapeHTML(shift.startTime)} - ${escapeHTML(shift.endTime)}</div></div>
+    <div class="divider"></div><div class="fg"><label>Intervalo Hombre Vivo</label><div>${shift.interval} minutos (tolerancia ${shift.tolerance} min)</div></div>
+    <div class="divider"></div><div class="fg"><label>Supervisor</label><div>${escapeHTML(sup?.name||"—")}</div></div>
+  `, `<button class="btn btn-primary" onclick="closeModal()">Cerrar</button>`);
+}
+
+function initGuardPanel(){
+  if(COUNTDOWN_TIMER) clearInterval(COUNTDOWN_TIMER);
+  updateGuardCountdown();
+  COUNTDOWN_TIMER=setInterval(updateGuardCountdown,1000);
+  const btn=document.getElementById("confirm-btn");
+  if(btn) btn.onclick=confirmarPresencia;
+}
+function nextPendingReport(){
+  const shift = loadData("app_shifts").find(s=>s.guardId===CURRENT_USER.linkedId && s.date===todayStr() && s.status==="en_curso");
+  if(!shift) return null;
+  const reports = loadData("app_lifereports").filter(r=>r.shiftId===shift.id && r.status==="pendiente").sort((a,b)=>a.scheduledAt-b.scheduledAt);
+  return {shift, report: reports[0]||null};
+}
+function updateGuardCountdown(){
+  const timeEl=document.getElementById("cd-time"); if(!timeEl) return;
+  const subEl=document.getElementById("cd-sub");
+  const btn=document.getElementById("confirm-btn");
+  const {report} = nextPendingReport()||{};
+  if(!report){ timeEl.textContent="Sin reportes pendientes"; timeEl.style.fontSize="20px"; if(subEl) subEl.textContent=""; if(btn) btn.disabled=true; return; }
+  timeEl.style.fontSize="";
+  const diffMs = report.scheduledAt - Date.now();
+  if(diffMs<=0){
+    const shift=loadData("app_shifts").find(s=>s.id===report.shiftId);
+    const overdue = Date.now() - (report.scheduledAt + (shift?shift.tolerance:5)*60000);
+    if(overdue>0){ timeEl.textContent="🚨 VENCIDO"; timeEl.classList.add("urgent"); if(subEl) subEl.textContent="El reporte superó el tiempo de tolerancia."; }
+    else { timeEl.textContent="🔔 AHORA"; timeEl.classList.add("urgent"); if(subEl) subEl.textContent="Es momento de realizar el reporte."; }
+    if(btn) btn.disabled=false;
+  } else {
+    const h=Math.floor(diffMs/3600000), m=Math.floor((diffMs%3600000)/60000), s=Math.floor((diffMs%60000)/1000);
+    timeEl.textContent=`${pad(h)}:${pad(m)}:${pad(s)}`;
+    timeEl.classList.remove("urgent");
+    if(subEl) subEl.textContent=`Programado a las ${report.scheduledTime}`;
+    if(btn) btn.disabled=false;
+  }
+}
+function confirmarPresencia(){
+  const {shift,report} = nextPendingReport()||{};
+  if(!report){ toast("warn","No tienes reportes pendientes en este momento"); return; }
+  const finish=(lat,lng,gpsNote)=>{
+    const zone=loadData("app_zones").find(z=>z.id===report.zoneId);
+    let zoneCheck="";
+    if(zone && zone.lat && lat!=null){
+      const dist=haversine(lat,lng,zone.lat,zone.lng);
+      if(dist!=null) zoneCheck = dist<=(zone.radius||100) ? "✅ Dentro de la zona" : "⚠️ Fuera de la zona ("+Math.round(dist)+" m)";
+    }
+    const now=Date.now();
+    const diffMinutes=Math.round((now-report.scheduledAt)/60000);
+    let status="reportado";
+    if(now > report.scheduledAt + shift.tolerance*60000) status="vencido";
+    else if(now > report.scheduledAt) status="tarde";
+
+    const reports=loadData("app_lifereports");
+    const rec=reports.find(r=>r.id===report.id);
+    rec.actualTime=nowTimeStr(); rec.lat=lat; rec.lng=lng; rec.status=status;
+    rec.diffMinutes=diffMinutes; rec.device=navigator.userAgent.slice(0,60);
+    rec.notes=zoneCheck||gpsNote||"";
+    saveData("app_lifereports",reports);
+
+    if(status==="vencido"){
+      const alerts=loadData("app_alerts");
+      alerts.push({id:generateId("al"),level:"critica",type:"hombre_vivo_vencido",title:"Reporte Hombre Vivo vencido",
+        guardId:report.guardId,zoneId:report.zoneId,postId:shift.postId,scheduledTime:report.scheduledTime,date:report.date,
+        supervisorId:shift.supervisorId,lifeReportId:report.id,status:"activa",createdAt:now});
+      saveData("app_alerts",alerts);
+    }
+    const h=loadData("app_history");
+    h.push({id:generateId("h"),type:"hombre_vivo",description:`Hombre Vivo confirmado (${status}) - ${zoneCheck}`,date:todayStr(),time:nowTimeStr()});
+    saveData("app_history",h);
+
+    generateLifeReportsForToday();
+    const msg = status==="reportado" ? "Presencia confirmada dentro del tiempo" :
+      status==="tarde" ? "Tarde, pero dentro de tolerancia" : "Reporte vencido registrado";
+    toast(status==="vencido"?"warn":"ok", msg + (zoneCheck?(" · "+zoneCheck):""));
+    navigate("guardhome");
+  };
+  // BACKEND / NAVEGADOR: la geolocalización del navegador puede estar limitada por
+  // permisos del usuario, por requerir HTTPS, o por no estar disponible en el dispositivo.
+  // En producción, validar también del lado del servidor.
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(
+      pos=>finish(pos.coords.latitude,pos.coords.longitude,""),
+      err=>finish(null,null,"No se pudo obtener la ubicación GPS ("+err.message+")"),
+      {timeout:5000,enableHighAccuracy:true}
+    );
+  } else finish(null,null,"Geolocalización no disponible en este navegador");
+}
+
+/* =========================================================
+   20. SIDEBAR / RESPONSIVE
+   ========================================================= */
+function openSidebarMobile(){ document.getElementById("sidebar").classList.add("open"); document.getElementById("overlay").classList.add("show"); }
+function closeSidebarMobile(){ document.getElementById("sidebar").classList.remove("open"); document.getElementById("overlay").classList.remove("show"); }
+document.getElementById("hamburger").onclick=openSidebarMobile;
+document.getElementById("overlay").onclick=closeSidebarMobile;
+
+/* =========================================================
+   21. INICIALIZACIÓN / LOGIN FLOW
+   ========================================================= */
+document.getElementById("login-form").addEventListener("submit",e=>{
+  e.preventDefault();
+  const u=document.getElementById("login-user").value.trim();
+  const p=document.getElementById("login-pass").value;
+  const user=attemptLogin(u,p);
+  const errBox=document.getElementById("login-error");
+  if(!user){ errBox.textContent="Usuario o contraseña incorrectos."; errBox.classList.remove("hidden"); return; }
+  errBox.classList.add("hidden");
+  boot();
+});
+document.getElementById("logout-btn").onclick=logout;
+
+function boot(){
+  document.getElementById("login-screen").style.display="none";
+  document.getElementById("app").style.display="block";
+  document.getElementById("side-name").textContent=CURRENT_USER.name;
+  document.getElementById("side-role").textContent=CURRENT_USER.role;
+  document.getElementById("side-avatar").textContent=CURRENT_USER.name.split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase();
+  buildNav();
+  generateLifeReportsForToday();
+  checkLifeReportsAndAlerts();
+  const start = NAV_ITEMS[CURRENT_USER.role][0].route;
+  navigate(location.hash.replace("#","")||start);
+  if(window._pollTimer) clearInterval(window._pollTimer);
+  window._pollTimer=setInterval(async ()=>{
+    const modalOpen = document.getElementById("modal-bg").classList.contains("show");
+    if(!modalOpen) await initCache(); // trae cambios hechos por otros usuarios/dispositivos desde Supabase
+    const changed = checkLifeReportsAndAlerts();
+    updateBell();
+    if(!modalOpen) navigate(currentRoute); // refresca la vista con los datos más recientes
+    else if(changed) updateBell();
+  }, 15000);
+}
+
+(async function init(){
+  const ok = await initCache();
+  if(ok) seedDatabase();
+  const btn=document.getElementById("login-submit-btn");
+  if(ok){
+    btn.disabled=false;
+    btn.innerHTML='<i class="fa-solid fa-right-to-bracket"></i> Ingresar';
+  } else {
+    btn.innerHTML='<i class="fa-solid fa-triangle-exclamation"></i> Sin conexión a Supabase';
+  }
+  if(ok && restoreSession()) boot();
+})();
+</script>
+</body>
+</html>
